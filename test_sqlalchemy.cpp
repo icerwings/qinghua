@@ -1,23 +1,52 @@
+#include <vector>
+#include <algorithm>
 #include "sqlalchemy.h"
 #include <iostream>
 
-struct UserTb {
-    Field<int64_t>      id;
-    Field<int64_t>      userid;
-    Field<int16_t>      type;
-    Field<string>       name;
-    Field<int32_t>      age;
+struct Students {
+    Column<int64_t>      id;
+    Column<int64_t>      userid;
+    Column<int16_t>      type;
+    Column<string, 64>   name;
+    Column<int32_t>      age;
+    Column<string, 32>   nick;
 
-    _DEFINE(UserTb, _COLUMN(id), _COLUMN(userid), _COLUMN(type), _COLUMN(name), _COLUMN(age))
+    _DEFINE(Students, _FIELD(id), _FIELD(userid), _FIELD(type), _FIELD(name), _FIELD(age), _FIELD(nick))
+    _CONSTRUCT(Students, 0, id, userid, type, name, age, nick);
+    _CONSTRUCT(Students, 1, userid, name);
+    void Print() {
+        cout << id.val << "," << userid.val << "," << type.val << "," << name.val << "," << age.val << "," << nick.val << endl;
+    }
 };
 
 int main() {
+    const EngHost   host("127.0.0.1", "root", "", "test", 3306);
+    Engine      *eng = new Engine(host, 10);
+    if (eng == nullptr) {
+        return -1;
+    }
     Session    se;
-    UserTb     user;
-    string      ss  = "123456";
-    se.Table("my_table").Query(user.name, user.age).FilterAnd(user.id > 0, user.userid != 10024, user.type == 1, user.name == ss, user.name == "abc").Orderby(user.id).Limit(10);
-    se.Print();
-    se.Add(user.userid = 10, user.type = 1024, user.name = "aaa", user.name = ss, user.age = 20);
-    se.Print();
+    se.Bind(eng);
+    Students    student;
+    int ret = se.Table("Students").Add(student.userid = 10024, student.type = 1, student.name = "qinghua", student.age = 38).Execute();
+    cout << "ret=" << ret << endl;
+
+    uint64_t id = se.GetInsertId();
+    ret = se.Update(student.type = 2, student.nick = "haha").Filter(student.id == id).Execute();
+    cout << "upt=" << ret << endl;
+    
+    vector<Students>  v;
+    se.Table("Students").Query(student.id, student.userid, student.type, student.name, student.age, student.nick);
+    se.GetAll(v);
+    for_each(v.begin(), v.end(), [](Students s) {
+        s.Print();
+    });
+    v.clear();
+    se.Query(student.userid, student.name).Filter(student.id > 2, _OR(student.type == 1, student.type == 2));
+    se.GetAll<Students, 1>(v);
+    for_each(v.begin(), v.end(), [](Students s) {
+        s.Print();
+    });
+    
     return 0;
 }
